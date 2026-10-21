@@ -1,4 +1,3 @@
-import wandb
 import torch
 
 
@@ -18,6 +17,8 @@ def wandb_confusion_matrix(cm, class_names=None, title=None):
     :param cm:
     :return:
     """
+    import wandb
+
     assert isinstance(cm, torch.Tensor)
     assert cm.dim() == 2
     assert cm.shape[0] == cm.shape[1]

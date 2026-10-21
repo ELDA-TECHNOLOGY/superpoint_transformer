@@ -26,6 +26,7 @@ from .scatter import *
 from .encoding import *
 from .time import *
 from .multiprocessing import *
+from .wandb import *
 from .parameter import *
 from .graph import *
 from .semantic import *
