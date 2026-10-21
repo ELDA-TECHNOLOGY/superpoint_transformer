@@ -85,7 +85,10 @@ def scatter_pca(x, idx, on_cpu=False, algorithm='eigh'):
         eigenvec = eigenvec.to(device)
 
     elif algorithm == 'eigh':
-        eigenval, eigenvec = torch.linalg.eigh(cov, UPLO='U')
+        # cuSOLVER's batched syev rejects batches above ~31k matrices
+        out = [torch.linalg.eigh(c, UPLO='U') for c in cov.split(16384)]
+        eigenval = torch.cat([o[0] for o in out])
+        eigenvec = torch.cat([o[1] for o in out])
 
     elif algorithm == 'eig':
         cov[:, ij[:, 1], ij[:, 0]] = upper_triangle
@@ -151,6 +154,10 @@ def scatter_nearest_neighbor(
     assert edge_index.shape == coalesce(edge_index).shape, \
         "Does not support duplicate edges, please coalesce the edges" \
         " before calling this function"
+
+    # A level whose radius graph found no pair would otherwise die in torch.cat
+    if edge_index.shape[1] == 0:
+        return points[:0], edge_index[:, :0]
 
     # Recursive call in case chunk is specified. Chunk allows limiting
     # the number of edges processed at once. This might alleviate
