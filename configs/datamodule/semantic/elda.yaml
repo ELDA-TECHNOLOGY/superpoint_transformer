@@ -53,7 +53,6 @@ knn: 25
 knn_r: 10
 knn_step: -1
 knn_min_search: 10
-ground_model: 'ransac'
 ground_threshold: 5
 ground_xy_grid: 5
 ground_scale: 20
