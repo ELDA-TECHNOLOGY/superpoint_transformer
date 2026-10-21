@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from sklearn.linear_model import RANSACRegressor
 from torch_scatter import scatter_min
-from torch_ransac3d.plane import plane_fit
 
 from src.utils.partition import xy_partition
 from src.utils.point import is_xyz_tensor
@@ -131,6 +130,7 @@ def single_plane_model(pos, random_state=0, residual_threshold=1e-3):
             return z - torch.from_numpy(ransac.predict(xy.cpu().numpy())).to(device)
 
     else:
+        from torch_ransac3d.plane import plane_fit
         result = plane_fit(
             pts=pos,
             thresh=residual_threshold,

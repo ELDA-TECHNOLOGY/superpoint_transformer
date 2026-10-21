@@ -4,7 +4,6 @@ import glob
 import torch
 import shutil
 import logging
-import pandas as pd
 import os.path as osp
 from typing import List
 from torch_geometric.data import extract_zip
@@ -138,6 +137,8 @@ def read_s3dis_room(
 
     :return: Data
     """
+    import pandas as pd
+
     if verbose:
         log.debug(f"Reading room: {room_dir}")
 

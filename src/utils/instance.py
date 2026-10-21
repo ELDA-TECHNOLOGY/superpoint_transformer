@@ -1,7 +1,6 @@
 import hydra
 import torch
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 from copy import deepcopy
 from itertools import product
@@ -1390,6 +1389,7 @@ def grid_search_panoptic_partition(
         results_data.append(current_results)
 
     # Print a DataFrame summarizing the results
+    import pandas as pd
     metric_columns = []
     if panoptic:
         metric_columns += ['PQ', 'SQ', 'RQ']

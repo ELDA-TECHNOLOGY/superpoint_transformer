@@ -1,4 +1,3 @@
-import git
 import logging
 
 log = logging.getLogger(__name__)
@@ -10,6 +9,7 @@ __all__ = ['get_commit_hash', 'VersionHolder']
 def get_commit_hash():
     """Get the current git commit hash of the current directory."""
     try:
+        import git
         repo = git.Repo(search_parent_directories=True)
         return repo.head.commit.hexsha
     except Exception:

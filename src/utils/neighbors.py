@@ -1,8 +1,9 @@
+import numpy as np
 import torch
+from scipy.spatial import cKDTree
 from time import time
 
 import src
-from src.dependencies.FRNN import frnn
 from torch_scatter import scatter
 from torch_geometric.utils import coalesce
 from src.utils.scatter import scatter_nearest_neighbor
@@ -10,6 +11,7 @@ from src.utils.sparse import sizes_to_pointers
 
 
 __all__ = [
+    'radius_knn',
     'knn_1',
     'knn_1_graph',
     'knn_2',
@@ -21,31 +23,31 @@ __all__ = [
     'neighbors_dense_to_csr']
 
 
-def _frnn_grid_points(xyz_query, xyz_search, K=1, r=1):
-    """A wrapper around frnn.frnn_grid_points to facilitate the handling
-    ot K and r input formats.
+def radius_knn(xyz_query, xyz_search, k, r):
+    """Fixed-radius k-NN on CPU, reproducing the conventions of the FRNN
+    CUDA kernel this replaces: SQUARED distances, `-1` padding for both
+    indices and distances, ascending sort, and an inclusive radius test.
+    Results are returned on the query tensor's device.
     """
     device = xyz_query.device
+    query = xyz_query.detach().cpu().numpy().astype(np.float64, copy=False)
+    search = xyz_search.detach().cpu().numpy().astype(np.float64, copy=False)
 
-    if K > 1000:
-        print(
-            f"Warning: FRNN is not optimal for for K>1000. "
-            f"You may want to consider using brute force search with "
-            f"`knn_brute_force()` if your query set is not too large.")
+    tree = cKDTree(search, balanced_tree=False, compact_nodes=False)
+    # scipy prunes on a strict bound, so widen it and apply the inclusive test below
+    distance, index = tree.query(
+        query, k=k, distance_upper_bound=float(r) * (1 + 1e-9), workers=-1)
 
-    # Make sure k and r are 1D tensors on the same device
-    if isinstance(r, torch.Tensor):
-        r = r.view(-1).to(device)
-    else:
-        r = torch.tensor([r], device=device)
+    distance = distance.reshape(query.shape[0], k)
+    index = index.reshape(query.shape[0], k)
 
-    if isinstance(K, torch.Tensor):
-        K = K.view(-1).to(device)
-    else:
-        K = torch.tensor([K], device=device)
+    missing = ~np.isfinite(distance) | (distance > float(r))
+    distance = np.where(missing, -1.0, distance ** 2).astype(np.float32)
+    index = np.where(missing, -1, index).astype(np.int64)
 
-    # Run the actual FRNN search
-    return frnn.frnn_grid_points(xyz_query, xyz_search, K=K, r=r)
+    return (
+        torch.from_numpy(distance).to(device),
+        torch.from_numpy(index).to(device))
 
 
 def knn_1(
@@ -79,27 +81,20 @@ def knn_1(
 
     # Data initialization
     device = xyz.device
-    xyz_query = (xyz + batch_offset).view(1, -1, 3)
-    xyz_search = (xyz + batch_offset).view(1, -1, 3)
-    if not xyz.is_cuda:
-        xyz_query = xyz_query.cuda()
-        xyz_search = xyz_search.cuda()
+    xyz_shifted = xyz + batch_offset
 
-    # KNN on GPU. Actual neighbor search now
     k_search = k if self_is_neighbor else k + 1
-    distances, neighbors, _, _ = _frnn_grid_points(
-        xyz_query, xyz_search, K=k_search, r=r_max)
+    distances, neighbors = radius_knn(xyz_shifted, xyz_shifted, k_search, r_max)
 
     # Remove each point from its own neighborhood
-    neighbors = neighbors[0] if self_is_neighbor else neighbors[0][:, 1:]
-    distances = distances[0] if self_is_neighbor else distances[0][:, 1:]
+    neighbors = neighbors if self_is_neighbor else neighbors[:, 1:]
+    distances = distances if self_is_neighbor else distances[:, 1:]
 
     # Oversample the neighborhoods where less than k points were found
     if oversample:
         neighbors, distances = oversample_partial_neighborhoods(
             neighbors, distances, k)
 
-    # Restore the neighbors and distances to the input device
     if neighbors.device != device:
         neighbors = neighbors.to(device)
         distances = distances.to(device)
@@ -219,22 +214,14 @@ def knn_2(
         batch_query_offset[:, 2] = batch_query * z_offset
 
     # Data initialization
-    xyz_query = (x_query + batch_query_offset).view(1, -1, 3)
-    xyz_search = (x_search + batch_search_offset).view(1, -1, 3)
+    xyz_query = x_query + batch_query_offset
+    xyz_search = x_search + batch_search_offset
 
-    # Move to GPU if need be
-    if not xyz_query.is_cuda:
-        xyz_query = xyz_query.cuda()
-        xyz_search = xyz_search.cuda()
+    distances, neighbors = radius_knn(xyz_query, xyz_search, k, r_max)
 
-    # KNN on GPU. Actual neighbor search now
-    distances, neighbors, _, _ = _frnn_grid_points(
-        xyz_query, xyz_search, K=k, r=r_max)
-
-    # Move back to original device
     device = x_search.device
-    neighbors = neighbors[0].to(device)
-    distances = distances[0].to(device)
+    neighbors = neighbors.to(device)
+    distances = distances.to(device)
     if k == 1:
         neighbors = neighbors[:, 0]
         distances = distances[:, 0]
@@ -318,7 +305,7 @@ def inliers_split(
         k_min,
         r_max=r_max,
         recursive=recursive,
-        q_in_s=q_in_s)[0]
+        q_in_s=q_in_s)[1]
 
 
 def outliers_split(
@@ -344,7 +331,7 @@ def outliers_split(
         k_min,
         r_max=r_max,
         recursive=recursive,
-        q_in_s=q_in_s)[1]
+        q_in_s=q_in_s)[0]
 
 
 def inliers_outliers_splits(
@@ -366,17 +353,16 @@ def inliers_outliers_splits(
     """
     # Data initialization
     device = xyz_query.device
-    xyz_query = xyz_query.view(1, -1, 3).cuda()
-    xyz_search = xyz_search.view(1, -1, 3).cuda()
+    xyz_query = xyz_query.view(-1, 3)
+    xyz_search = xyz_search.view(-1, 3)
 
-    # KNN on GPU. Actual neighbor search now
-    neighbors = _frnn_grid_points(
-        xyz_query, xyz_search, K=k_min + q_in_s, r=r_max)[1]
+    neighbors = radius_knn(
+        xyz_query, xyz_search, k_min + q_in_s, r_max)[1]
 
     # If the Query points are included in the Search points, remove each
     # point from its own neighborhood
     if q_in_s:
-        neighbors = neighbors[0][:, 1:]
+        neighbors = neighbors[:, 1:]
 
     # Get the number of found neighbors for each point. Indeed,
     # depending on the cloud properties and the chosen K and radius,
@@ -403,8 +389,8 @@ def inliers_outliers_splits(
         return idx_outliers.to(device), idx_inliers.to(device)
 
     # Recursively search actual outliers among the potential
-    xyz_query_sub = xyz_query[0, idx_inliers[idx_potential]]
-    xyz_search_sub = xyz_search[0, idx_inliers]
+    xyz_query_sub = xyz_query[idx_inliers[idx_potential]]
+    xyz_search_sub = xyz_search[idx_inliers]
     idx_outliers_sub, idx_inliers_sub = inliers_outliers_splits(
         xyz_query_sub, xyz_search_sub, k_min, r_max=r_max, recursive=True,
         q_in_s=True)

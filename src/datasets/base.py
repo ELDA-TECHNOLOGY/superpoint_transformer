@@ -28,7 +28,6 @@ from src.transforms import (
     RemoveKeys,
     SampleXYTiling,
     SampleRecursiveMainXYAxisTiling)
-from src.visualization import show
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -1205,6 +1204,7 @@ class BaseDataset(InMemoryDataset):
             center = nag[0].pos[i_point].cpu().tolist()
             title = f"Label={label} - Cloud={i_cloud} - Center={center}"
             print(f"\n{title}")
+            from src.visualization import show
             show(
                 nag,
                 center=center,

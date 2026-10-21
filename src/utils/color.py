@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 from colorhash import ColorHash
-from plotly.colors import sample_colorscale, get_colorscale
 
 
 __all__ = [
@@ -107,6 +106,7 @@ def feats_to_plotly_rgb(feats, normalize=False, colorscale='Agsunset'):
         if colorscale is None:
             color = feats.repeat_interleave(3, 1)
         else:
+            from plotly.colors import sample_colorscale, get_colorscale
             colorscale = get_colorscale(colorscale)
             feats = min_max_normalize(feats).squeeze().numpy()
             color = np.array(sample_colorscale(colorscale, feats))

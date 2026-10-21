@@ -8,7 +8,6 @@ import src.models
 import src.nn
 import src.transforms
 import src.utils
-import src.visualization
 
 __version__ = '3.0.0'
 
