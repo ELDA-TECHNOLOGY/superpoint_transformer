@@ -6,6 +6,7 @@ from time import time
 import src
 from torch_scatter import scatter
 from torch_geometric.utils import coalesce
+from src.utils.cpu import available_cpu_count
 from src.utils.scatter import scatter_nearest_neighbor
 from src.utils.sparse import sizes_to_pointers
 
@@ -36,7 +37,8 @@ def radius_knn(xyz_query, xyz_search, k, r):
     tree = cKDTree(search, balanced_tree=False, compact_nodes=False)
     # scipy prunes on a strict bound, so widen it and apply the inclusive test below
     distance, index = tree.query(
-        query, k=k, distance_upper_bound=float(r) * (1 + 1e-9), workers=-1)
+        query, k=k, distance_upper_bound=float(r) * (1 + 1e-9),
+        workers=available_cpu_count())
 
     distance = distance.reshape(query.shape[0], k)
     index = index.reshape(query.shape[0], k)

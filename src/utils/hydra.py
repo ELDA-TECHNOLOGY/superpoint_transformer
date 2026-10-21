@@ -15,7 +15,7 @@ def init_config(config_name='train.yaml', overrides=[]):
         OmegaConf.register_new_resolver('eval', eval)
 
     GlobalHydra.instance().clear()
-    pyrootutils.setup_root(".", pythonpath=True)
+    pyrootutils.setup_root(__file__, pythonpath=True)
     with initialize(version_base='1.2', config_path="../../configs"):
         cfg = compose(config_name=config_name, overrides=overrides)
     return cfg

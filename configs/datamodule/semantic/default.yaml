@@ -98,11 +98,13 @@ dataloader:
 # ignored if the training device is "cpu" or "mps"
 non_blocking: True
 
+device: 'cuda'
+
 # Preprocessing
 pre_transform:
     - transform: DataTo
       params:
-        device: 'cuda'
+        device: ${datamodule.device}
     - transform: SaveNodeIndex
       params:
         key: 'sub'

@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - override /datamodule: semantic/elda.yaml
+  - override /model: semantic/spt-2.yaml
+
+datamodule:
+  sample_graph_k: 2

@@ -226,7 +226,7 @@ def mlp_model(
         criterion='l2',
         steps=1000,
         check_every_n_steps=50,
-        device='cuda',
+        device=None,
         verbose=False):
     """Fit an MLP to a point cloud. Assuming the point cloud mostly
     contains ground points, this function will train an MLP to model the
@@ -270,6 +270,7 @@ def mlp_model(
     from src.nn import MLP
     from src.nn.norm import BatchNorm
 
+    device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
     assert is_xyz_tensor(pos)
 
     if verbose:

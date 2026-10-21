@@ -19,6 +19,12 @@ from src.nn import CatFusion
 
 __all__ = ['CutPursuitPartition', 'GridPartition', 'GreedyContourPriorPartition']
 
+
+def free_memory(device):
+    if torch.device(device).type == 'cuda':
+        torch.cuda.empty_cache()
+
+
 class CutPursuitPartition(Transform):
     """Partition a graph contained in a `Data` object using cut-pursuit.
 
@@ -252,8 +258,8 @@ class CutPursuitPartition(Transform):
             edge_attr = torch.from_numpy(edges[2] / reg)
             node_size = torch.from_numpy(node_size)
             node_size_new = scatter_sum(
-                node_size.cuda(),
-                super_index.cuda(), dim=0).cpu().long()
+                node_size.to(device),
+                super_index.to(device), dim=0).to('cpu').long()
             d2 = Data(
                 pos=pos,
                 x=x,
@@ -284,16 +290,16 @@ class CutPursuitPartition(Transform):
                     "Expected Data.y to hold `(num_nodes, num_classes)` " \
                     "histograms, not single labels"
                 d2.y = scatter_sum(
-                    d1.y.cuda(), d1.super_index.cuda(), dim=0).cpu()
-                torch.cuda.empty_cache()
+                    d1.y.to(device), d1.super_index.to(device), dim=0).to('cpu')
+                free_memory(device)
 
             if 'semantic_pred' in d1.keys:
                 assert d1.semantic_pred.dim() == 2, \
                     "Expected Data.semantic_pred to hold `(num_nodes, num_classes)` " \
                     "histograms, not single labels"
                 d2.semantic_pred = scatter_sum(
-                    d1.semantic_pred.cuda(), d1.super_index.cuda(), dim=0).cpu()
-                torch.cuda.empty_cache()
+                    d1.semantic_pred.to(device), d1.super_index.to(device), dim=0).to('cpu')
+                free_memory(device)
 
             # TODO: aggregate other attributes ?
 

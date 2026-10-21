@@ -13,7 +13,7 @@ def get_commit_hash():
         repo = git.Repo(search_parent_directories=True)
         return repo.head.commit.hexsha
     except Exception:
-        log.warning("⚠️ No git commit hash found in the current directory.")
+        log.debug("No git commit hash found in the current directory.")
         return 'unknown'
     
 

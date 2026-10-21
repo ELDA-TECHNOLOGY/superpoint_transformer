@@ -659,9 +659,10 @@ class PretrainedCNN(Transform):
         ckpt_path, 
         partition_hf=None, 
         norm_mode='graph', 
-        device='cuda',
+        device=None,
         verbose=False):
         
+        device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.first_stage = first_stage
         self.norm_mode = norm_mode
         self.ckpt_path = ckpt_path
